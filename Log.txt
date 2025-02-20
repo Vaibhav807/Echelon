@@ -1,0 +1,12 @@
+Iteration 1 - Vaibhav - I have been able to access the new gmail account and retrieve the contents from it. But a lot
+more work needs to be done to extract the contents from the emails and save them in a structured format. However, I have
+also tested the same code and it seems like you can extract multiple emails from the same account and it automatically formats
+it in a good way. This saves a lot of time.
+
+Iteration 2 - Vaibhav - I have been able to now add a date entry as well, this way we can make sure to only search for emails 
+on the current date. Another edit, I have been able to add a range of dates as well, this way we can search for emails in a 
+specific range of dates.
+
+Iteration 3 - Vaibhav - Succesfully sent an email from the test account to the recipient account. 
+    edit - 1 major thing I have done is create custom functions which will be used as custom tools for the LLM in future iterations. 
+    Currently there are 2 tools - retrieve_emails and send_email.
