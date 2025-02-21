@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Granite 8B Stream</title>
+</head>
+<body>
+    <h1>Granite 8B Streaming</h1>
+    <form id="chat-form">
+        <input type="text" name="user_input" id="user-input" required>
+        <button type="submit">Send</button>
+    </form>
+    <div id="response-area"></div>
+
+    <script>
+    document.getElementById('chat-form').onsubmit = function(e) {
+        e.preventDefault();
+        const responseArea = document.getElementById('response-area');
+        responseArea.innerHTML = 'Loading...';
+        
+        fetch('/', {
+            method: 'POST',
+            body: new FormData(e.target)
+        })
+        .then(response => {
+            const reader = response.body.getReader();
+            responseArea.innerHTML = '';
+            
+            function readStream() {
+                reader.read().then(({done, value}) => {
+                    if (done) return;
+                    const text = new TextDecoder().decode(value);
+                    responseArea.innerHTML += text;
+                    readStream();
+                });
+            }
+            
+            readStream();
+        })
+        .catch(error => {
+            responseArea.innerHTML = 'Error: ' + error;
+        });
+    };
+    </script>
+</body>
+</html>
