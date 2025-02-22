@@ -81,6 +81,8 @@ def retrieve_emails(sender_email, start_date, end_date):
         except:
             pass
 
+
+
 def send_email(recipient_email, subject, body, attachments=None):
     print("\n" + "="*50)
     print("📤 SENDING EMAIL")
