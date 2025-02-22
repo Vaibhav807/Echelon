@@ -1,208 +1,44 @@
 import re
 import imaplib
 import email
-import yaml  
+import yaml
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.application import MIMEApplication
 import os
 from datetime import datetime, timedelta
-import ollama
-from ollama import chat
+import openai  # Import the OpenAI library
+from openai import OpenAI
+from openai import OpenAI
+client = OpenAI(api_key="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")
 
 class email_agent:
-    def __init__(self, task):
+    def __init__(self, task=None):
+        # Load credentials from a YAML file
         with open("details.yml") as f:
             content = f.read()
             my_credentials = yaml.load(content, Loader=yaml.FullLoader)
             self.user, self.password = my_credentials["user"], my_credentials["password"]
             self.task = task
             self.current_date = datetime.now().strftime("%d-%b-%Y")
-    
-    def retrieve_emails(self):
-        sender = "ALL"  # Always use "ALL"
-        
-        print(f"\n📧 RETRIEVING EMAILS from {sender}")
-        print("="*50 + "\n")
-        
-        try:
-            imap_url = 'imap.gmail.com'
-            my_mail = imaplib.IMAP4_SSL(imap_url)
-            my_mail.login(self.user, self.password)
-            my_mail.select('Inbox')
 
-            # Always retrieve emails from "ALL"
-            search_criteria = f"(ALL)"
-            try:
-                my_mail.noop()
-            except:
-                my_mail = imaplib.IMAP4_SSL(imap_url)
-                my_mail.login(self.user, self.password)
-                my_mail.select('Inbox')
-            
-            _, data = my_mail.search(None, search_criteria)
-            if not data[0]:
-                print(f"\n❌ No emails found.")
-                my_mail.logout()
-                return []
-            
-            mail_id_list = data[0].split()
-            print(f"\n📬 Found {len(mail_id_list)} emails.\n")
+        # Set OpenAI API key
+        openai.api_key = "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"  # Replace with your actual OpenAI API key
 
-            msgs = []
-            email_bodies = []  # Collect email bodies for summarization
-            
-            for num in mail_id_list:
-                typ, data = my_mail.fetch(num, '(RFC822)')
-                msgs.append(data)
-
-            for msg in msgs[::-1]:
-                for response_part in msg:
-                    if type(response_part) is tuple:
-                        my_msg = email.message_from_bytes((response_part[1]))
-                        subject = my_msg['subject']
-                        sender_email = my_msg['from']
-                        body = ""
-                        
-                        for part in my_msg.walk():
-                            if part.get_content_type() == 'text/plain':
-                                body = part.get_payload()
-                                 
-                        print("="*40)
-                        print(f"📌 Subject: {subject}")
-                        print(f"👤 From: {sender_email}")
-                        print(f"📝 Body:")
-                        print(body)
-                        email_bodies.append({
-                            'content': body,
-                            'subject': subject,
-                            'sender': sender_email
-                        })
-            
-            return email_bodies
-
-        except Exception as e:
-            print(f"An error occurred: {str(e)}")
-            return []
-        finally:
-            try:
-                my_mail.logout()
-            except:
-                pass
-    
-    def summarize_emails(self, prompt=None):    
-        sender = "ALL"  # Always use "ALL"
-        
-        print(f"\n📧 SUMMARIZING EMAILS from {sender}")
-        print("="*50 + "\n")
-        
-        try:
-            # Connect to the Gmail IMAP server
-            imap_url = 'imap.gmail.com'
-            my_mail = imaplib.IMAP4_SSL(imap_url)
-            my_mail.login(self.user, self.password)
-            my_mail.select('Inbox')
-
-            # Always use "ALL" for search criteria
-            search_criteria = "ALL"
-            
-            try:
-                my_mail.noop()
-            except:
-                my_mail = imaplib.IMAP4_SSL(imap_url)
-                my_mail.login(self.user, self.password)
-                my_mail.select('Inbox')
-            
-            _, data = my_mail.search(None, search_criteria)
-            if not data[0]:
-                print(f"\n❌ No emails found.")
-                my_mail.logout()
-                return None  # No emails found
-
-            mail_id_list = data[0].split()
-            print(f"\n📬 Summarizing {len(mail_id_list)} emails.\n")
-
-            msgs = []
-            email_details = []  # Collect email details (sender, subject, body) for summarization
-            
-            for num in mail_id_list:
-                typ, data = my_mail.fetch(num, '(RFC822)')
-                msgs.append(data)
-
-            for msg in msgs[::-1]:
-                for response_part in msg:
-                    if isinstance(response_part, tuple):
-                        my_msg = email.message_from_bytes(response_part[1])
-                        subject = my_msg['subject']
-                        sender_email = my_msg['from']
-                        body = ""
-                        
-                        # Get the body of the email
-                        for part in my_msg.walk():
-                            if part.get_content_type() == 'text/plain':
-                                body = part.get_payload(decode=True).decode()
-
-                        # Collecting subject, sender, and body in a structured format
-                        email_details.append({
-                            'subject': subject,
-                            'sender': sender_email,
-                            'body': body
-                        })
-
-            # Create a formatted string that includes the subject, sender, and body for each email
-            if email_details:
-                try:
-                    combined_details = ""
-                    for email_details_entry in email_details:  # Renamed variable
-                        combined_details += f"Subject: {email_details_entry['subject']}\nFrom: {email_details_entry['sender']}\nBody:\n{email_details_entry['body']}\n\n"
-                    
-                    # Pass the combined details to the summarization model
-                    response = chat(model='granite3.1-dense:8b', messages=[{
-                        'role': 'system',
-                        'content': f"{self.task}"
-                    }, {
-                        'role': 'user',
-                        'content': combined_details
-                    }])
-
-                    summary = response['message']['content']
-                    print("\n📋 Summary:")
-                    print(summary)
-                    return summary
-                except Exception as e:
-                    print(f"Error summarizing emails: {str(e)}")
-                    return "Summary could not be generated."
-            else:
-                print("❌ No email details found to summarize.")
-                return None
-
-        except Exception as e:
-            print(f"An error occurred: {str(e)}")
-            return "An error occurred while summarizing emails."
-        finally:
-            try:
-                my_mail.logout()
-            except:
-                pass
-
-    def send_email(self, attachments=None):
-        sender = "ALL"  # Always use "ALL"
-        
+    def analyze_prior_emails(self):
         print("\n" + "=" * 50)
         print("📧 RETRIEVING AND SUMMARIZING EMAILS")
         print("=" * 50 + "\n")
-        
+
         try:
-            # Connect to the Gmail IMAP server
             imap_url = 'imap.gmail.com'
             my_mail = imaplib.IMAP4_SSL(imap_url)
             my_mail.login(self.user, self.password)
             my_mail.select('Inbox')
 
-            # Always use "ALL" for search criteria
-            search_criteria = "ALL"
-            
+            search_criteria = f'SINCE "{self.current_date}"'
+
             _, data = my_mail.search(None, search_criteria)
             if not data[0]:
                 print(f"❌ No emails found.")
@@ -214,7 +50,7 @@ class email_agent:
 
             msgs = []
             email_details = []  # Collect email details (sender, subject, body)
-            
+
             for num in mail_id_list:
                 typ, data = my_mail.fetch(num, '(RFC822)')
                 msgs.append(data)
@@ -246,167 +82,145 @@ class email_agent:
 
             print("📧 Summarizing email details...\n")
 
-            # Prepare the email details for the model
+            # Prepare the email details to be analyzed by the OpenAI GPT model
             formatted_email_details = ""
-            for email_info in email_details:
-                formatted_email_details += f"Subject: {email_info['subject']}\nFrom: {email_info['sender']}\nBody: {email_info['body']}\n\n"
+            for index,email_info in enumerate(email_details):
+                formatted_email_details += f"Email:{index} Subject: {email_info['subject']}\nFrom: {email_info['sender']}\nBody: {email_info['body']}\n\n"
 
-            # Generate email content based on the summary
+            # Call the OpenAI GPT model to assess the importance of each email
             try:
-                response = chat(model='granite3.1-dense:8b', messages=[{
-                    'role': 'system',
-                    'content': f'''
-                        You are Vaibhav Mehra with the email address of granite.hackathon.test@gmail.com. Your task is to send an email(s) to complete the task: {self.task}.
-                        You have access to the following email history:
-                        {formatted_email_details}
-                        
-                        Based on this, generate an email with the following format:
-                        Recipient_email: [recipient_email]
-                        Subject: [subject]
-                        Body: [body]
-                    '''
-                }])
+                response = client.chat.completions.create(
+                    model="gpt-4o",  # You can choose another GPT model
+                    messages=[
+                        {
+                            'role': 'system',
+                            'content': f'''
+                            You are an AI designed to assess the importance of multiple emails,each email has its own index please give me a index sequence which order means importance based on their content. Below are the details of the emails:
 
-                # Extract the email content generated by the model
-                generated_content = response['message']['content']
+                            {formatted_email_details}
 
-                # Parse the generated content to extract recipient email, subject, and body
-                recipient_email, subject, body = self.parse_generated_content(generated_content)
+                            The output should be in the format of email indices, such as: 0,1,2 or 1,0,2, etc.
 
-                if not recipient_email:
-                    print("❌ No recipient email found.")
-                    return
+                            No explanation is needed.
+                            '''
+                        }
+                    ]
+                )
 
-                print(f"Generated Recipient: {recipient_email}")
-                print(f"Generated Subject: {subject}")
-                print(f"Generated Body:\n{body}")
+                importance_order = response.choices[0].message.content
+                importance_list = [email_details[int(index)] for index in importance_order.split(",")]
+                print(f"{importance_list}")
+                return importance_list
 
             except Exception as e:
-                print(f"❌ Error generating email content: {str(e)}")
-                return
-
-            # Create the email message with the generated content
-            msg = MIMEMultipart()
-            msg['From'] = self.user  # Sender's email address
-            msg['To'] = recipient_email  # Recipient's email address
-            msg['Subject'] = subject  # Email subject
-            msg.attach(MIMEText(body, 'plain'))  # Attach the body with MIMEText
-            
-            # Attach files if any
-            if attachments:
-                for file_path in attachments:
-                    if os.path.exists(file_path):
-                        try:
-                            with open(file_path, 'rb') as f:
-                                attachment = MIMEApplication(f.read(), _subtype=os.path.splitext(file_path)[1][1:])
-                                attachment.add_header('Content-Disposition', 'attachment', filename=os.path.basename(file_path))
-                                msg.attach(attachment)
-                                print(f"📎 Attachment {os.path.basename(file_path)} added.")
-                        except Exception as e:
-                            print(f"❌ Error reading attachment file {file_path}: {str(e)}")
-                            continue
-
-            # Send the email via SMTP
-            try:
-                smtp_server = "smtp.gmail.com"
-                smtp_port = 587
-                server = smtplib.SMTP(smtp_server, smtp_port)
-                server.starttls()  # Start TLS encryption
-                server.login(self.user, self.password)  # Login with credentials
-                server.send_message(msg)  # Send the email
-                print("✅ Email sent successfully!")
-
-            except Exception as e:
-                print(f"❌ Failed to send email: {str(e)}")
-            
-            finally:
-                server.quit()  # Quit the SMTP server connection
-                print("✅ SMTP session ended.")
+                print(f"❌ Error in OpenAI processing: {e}")
+                return None
 
         except Exception as e:
-            print(f"❌ Error retrieving emails: {str(e)}")
-        
-        finally:
-            try:
-                my_mail.logout()  # Logout from the IMAP server
-            except:
-                pass
-
-    def parse_generated_content(self, content):
-        """
-        Parse the generated content into recipient_email, subject, and body.
-        """
-        recipient_email = ""
-        subject = ""
-        body = ""
-        
-        lines = content.split('\n')
-        collecting_body = False
-        
-        for line in lines:
-            line = line.strip()  # Remove any extra spaces
-            
-            if line.startswith('Recipient_email:'):
-                recipient_email = line.replace('Recipient_email:', '').strip()
-            elif line.startswith('Subject:'):
-                subject = line.replace('Subject:', '').strip()
-            elif line.startswith('Body:'):
-                collecting_body = True
-                body = line.replace('Body:', '').strip()
-            elif collecting_body:
-                body += "\n" + line.strip()  # Append the rest of the body content
-
-        return recipient_email, subject, body
-
-    def create_task_plan(self, task_description):
-        print(f"\n=== Creating Task Plan for: {task_description} ===")
-        system_prompt = f'''
-        As a task planning assistant, choose the correct tool(s) from the provided options based on the task. Output only the tool names in the format: [tool1] or [tool2] or [tool1,tool2] and so on. Do not include explanations.  
-        Available tools:  
-        - retrieve_emails  
-        - send_email
-        - summarize_emails
-        '''
-        try:
-            response = ollama.chat(model='granite3.1-dense:8b', messages=[{
-                'role': 'system',
-                'content': system_prompt
-            },{
-                'role': 'user',
-                'content': task_description
-            }])
-            plan = response['message']['content']
-            print("\nGenerated Task Plan:")
-            print(plan)
-            return plan
-        except Exception as e:
-            print(f"Error generating task plan: {str(e)}")
+            print(f"❌ Error: {e}")
             return None
-
-    def execute_task_plan(self, plan):
-        if not plan:
-            print("No plan to execute")
-            return
         
-        print("\nExecuting Task Plan:")
-        tools = plan.strip('[]').split(',')
-        
-        for tool in tools:
-            tool = tool.strip()
-            try:
-                print(f"Executing: {tool}")
-                if tool == 'retrieve_emails':
-                    self.retrieve_emails()
-                elif tool == 'summarize_emails':
-                    self.summarize_emails()
-                elif tool == 'send_email':
-                    self.send_email()
-            except Exception as e:
-                print(f"Error executing {tool}: {str(e)}")
+    def send_email(self, importance_list):
+        try:
+            print(list(importance_list))
+            # Loop through each email in the prioritized list
+            for email_info in list(importance_list):
+                # Ensure the email_info is a dictionary and contains the expected fields
+                print(f"Processing Email: {email_info}")  # Debugging line
 
-# Example task
-task = "Summerize all different emails addresses"
-# task = "send email to guanming and reply about my interview feasibility"
-agent = email_agent(task)
-plan = agent.create_task_plan(task)
-agent.execute_task_plan(plan)
+                # Extract Subject, Sender, and Body of the email
+                subject = email_info['subject']
+                sender_email = email_info['sender']
+                body = email_info['body']
+
+                # Generate a reply using OpenAI (LLM)
+                try:
+                    # Prompt OpenAI to generate the email response
+                    response = client.chat.completions.create(
+                        model="gpt-4o",  # Choose the model
+                        messages=[{
+                            'role': 'system',
+                            'content': f'''
+                                You are Vaibhav Mehra's AI assistant. Based on the email below, generate a reply:
+                                - Subject: {subject}
+                                - From: {sender_email}
+                                - Body: {body}
+                                
+                                Please generate the response with the following format:
+                                Recipient_email: [email]
+                                Subject: [subject]
+                                Body: [body]
+                            '''
+                        }]
+                    )
+
+                    # Print the OpenAI response for debugging
+                    generated_content = response.choices[0].message.content
+                    print(f"Generated Content: {generated_content}")  # Debugging line
+
+                    # Parse the response content from OpenAI
+                    recipient_email, generated_subject, generated_body = self.parse_generated_content(generated_content)
+
+                    if not recipient_email:
+                        print(f"❌ No recipient email found for email from {sender_email}.")
+                        continue  # Skip to the next email if no recipient is found
+
+                    print(f"Generated Recipient: {recipient_email}")
+                    print(f"Generated Subject: {generated_subject}")
+                    print(f"Generated Body:\n{generated_body}")
+
+                except Exception as e:
+                    print(f"❌ Error generating reply for email from {sender_email}: {str(e)}")
+                    continue  # Skip to the next email if there is an error
+
+                # Create the email message with the generated content
+                msg = MIMEMultipart()
+                msg['From'] = self.user  # Sender's email address
+                msg['To'] = recipient_email  # Recipient's email address
+                msg['Subject'] = generated_subject  # Email subject
+                msg.attach(MIMEText(generated_body, 'plain'))  # Attach the body with MIMEText
+
+                # Send the email via SMTP
+                try:
+                    smtp_server = "smtp.gmail.com"
+                    smtp_port = 587
+                    server = smtplib.SMTP(smtp_server, smtp_port)
+                    server.starttls()  # Start TLS encryption
+                    server.login(self.user, self.password)  # Login with credentials
+                    server.send_message(msg)  # Send the email
+                    print(f"✅ Email sent successfully to {recipient_email}!")
+
+                except Exception as e:
+                    print(f"❌ Failed to send email to {recipient_email}: {str(e)}")
+                
+                finally:
+                    server.quit()  # Quit the SMTP server connection
+                    print("✅ SMTP session ended.")
+        
+        except Exception as e:
+            print(f"❌ Error in send_email function: {str(e)}")
+
+    def parse_generated_content(self, generated_content):
+        try:
+            print(f"Parsing generated content: {generated_content}")  # Debugging line
+            # Split the response into its components: recipient, subject, and body
+            lines = generated_content.strip().split('\n')
+            print(f"Lines after splitting: {lines}")  # Debugging line
+
+            recipient_email = lines[0].split(':')[-1].strip()
+            subject = lines[1].split(':')[-1].strip()
+            body = '\n'.join(lines[2:]).strip()
+
+            return recipient_email, subject, body
+        except Exception as e:
+            print(f"❌ Error parsing generated content: {str(e)}")
+            return None, None, None
+
+
+
+
+
+# Run the agent
+agent = email_agent()
+prioritized_emails = agent.analyze_prior_emails()
+agent.send_email(prioritized_emails)
