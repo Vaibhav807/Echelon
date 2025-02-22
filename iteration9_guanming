@@ -109,8 +109,10 @@ class email_agent:
 
                 importance_order = response.choices[0].message.content
                 importance_list = [email_details[int(index)] for index in importance_order.split(",")]
+                high_importance_list = importance_list[0]
+                low_importance_list = importance_list[1:]
                 print(f"{importance_list}")
-                return importance_list
+                return high_importance_list, low_importance_list
 
             except Exception as e:
                 print(f"❌ Error in OpenAI processing: {e}")
@@ -120,11 +122,10 @@ class email_agent:
             print(f"❌ Error: {e}")
             return None
         
-    def send_email(self, importance_list):
+    def send_low_email(self, low_importance_list):
         try:
-            print(list(importance_list))
             # Loop through each email in the prioritized list
-            for email_info in list(importance_list):
+            for email_info in list(low_importance_list):
                 # Ensure the email_info is a dictionary and contains the expected fields
                 print(f"Processing Email: {email_info}")  # Debugging line
 
@@ -200,6 +201,63 @@ class email_agent:
         except Exception as e:
             print(f"❌ Error in send_email function: {str(e)}")
 
+    def analyze_and_send_high_emails(self, high_importance_list):
+        print("\n" + "=" * 50)
+        print("📧 ANALYZING HIGH PRIORITY EMAIL")
+        print("=" * 50 + "\n")
+
+        try:
+            # Extract email information
+            subject = high_importance_list['subject']
+            sender_email = high_importance_list['sender']
+            body = high_importance_list['body']
+
+            # Generate 3 different response templates using GPT-4
+            try:
+                response = client.chat.completions.create(
+                    model="gpt-4o",
+                    messages=[{
+                        'role': 'system',
+                        'content': f'''
+                            You are Vaibhav Mehra's AI assistant. Based on the email below, generate 3 different response templates:
+                            - Subject: {subject}
+                            - From: {sender_email}
+                            - Body: {body}
+                            
+                            Please generate THREE different responses with the following format:
+                            
+                            Template 1:
+                            Recipient_email: [email]
+                            Subject: [subject]
+                            Body: [formal response]
+
+                            Template 2:
+                            Recipient_email: [email]
+                            Subject: [subject]
+                            Body: [casual but professional response]
+
+                            Template 3:
+                            Recipient_email: [email]
+                            Subject: [subject]
+                            Body: [concise and direct response]
+                        '''
+                    }]
+                )
+
+                # Print the templates for review
+                print("\n📝 Generated Response Templates:")
+                print("=" * 50)
+                print(response.choices[0].message.content)
+                print("=" * 50)
+                print("\nPlease review these templates and use them to compose your response.")
+
+            except Exception as e:
+                print(f"❌ Error generating templates: {str(e)}")
+                return
+
+        except Exception as e:
+            print(f"❌ Error in analyze_and_send_high_emails: {str(e)}")
+
     def parse_generated_content(self, generated_content):
         try:
             print(f"Parsing generated content: {generated_content}")  # Debugging line
@@ -222,5 +280,6 @@ class email_agent:
 
 # Run the agent
 agent = email_agent()
-prioritized_emails = agent.analyze_prior_emails()
-agent.send_email(prioritized_emails)
+high_priority_list,low_priority_list = agent.analyze_prior_emails()
+# agent.send_low_email(low_priority_list)
+agent.analyze_and_send_high_emails(high_priority_list)
