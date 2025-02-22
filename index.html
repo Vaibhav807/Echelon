@@ -97,25 +97,24 @@
         }
 
         .logo-wrapper.minimized {
-            top: 20px;
-            left: 20px;
-            transform: scale(0.4) translate(0, 0);
-            transform-origin: center center;
+            top: 0;
+            left: 0px;
+            transform: scale(0.4);
+            transform-origin: top left;
+            gap: 2px;
+            align-items: flex-start;
         }
 
         .logo-wrapper.minimized .logo-container {
             animation: none;
+            margin-top: 0;
         }
 
-        .logo-wrapper.minimized .logo-container {
-            animation: none;
-        }
-
-        .logo-wrapper.minimized .dot {
-            width: 6px;
-            height: 6px;
-            left: calc(60px + (50px * cos(var(--angle))));
-            top: calc(60px + (50px * sin(var(--angle))));
+        .logo-wrapper.minimized .logo-text {
+            font-size: 28px;
+            margin-left: 3px;
+            line-height: 1;
+            margin-top: 12px;
         }
 
         .logo-text {
