@@ -8,278 +8,259 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.application import MIMEApplication
 import os
 from datetime import datetime, timedelta
-import openai  # Import the OpenAI library
-from openai import OpenAI
-from openai import OpenAI
-client = OpenAI(api_key="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")
+import openai
 
-class email_agent:
-    def __init__(self, task=None):
-        # Load credentials from a YAML file
-        with open("details.yml") as f:
-            content = f.read()
-            my_credentials = yaml.load(content, Loader=yaml.FullLoader)
-            self.user, self.password = my_credentials["user"], my_credentials["password"]
-            self.task = task
-            self.current_date = datetime.now().strftime("%d-%b-%Y")
+# OpenAI Client Initialization
+client = openai.OpenAI(api_key="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")
 
-        # Set OpenAI API key
-        openai.api_key = "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"  # Replace with your actual OpenAI API key
+def load_credentials():
+    """Loads credentials from the details.yml file."""
+    with open("details.yml") as f:
+        content = f.read()
+        my_credentials = yaml.load(content, Loader=yaml.FullLoader)
+        user = my_credentials["user"]
+        password = my_credentials["password"]
+    return user, password
 
-    def analyze_prior_emails(self):
-        print("\n" + "=" * 50)
-        print("📧 RETRIEVING AND SUMMARIZING EMAILS")
-        print("=" * 50 + "\n")
 
-        try:
-            imap_url = 'imap.gmail.com'
-            my_mail = imaplib.IMAP4_SSL(imap_url)
-            my_mail.login(self.user, self.password)
-            my_mail.select('Inbox')
+def analyze_prior_emails(user, password):
+    """Analyzes the incoming emails and determines their importance using OpenAI."""
+    current_date = datetime.now().strftime("%d-%b-%Y")
+    print("\n" + "=" * 50)
+    print("📧 RETRIEVING AND SUMMARIZING EMAILS")
+    print("=" * 50 + "\n")
 
-            search_criteria = f'SINCE "{self.current_date}"'
+    try:
+        imap_url = 'imap.gmail.com'
+        my_mail = imaplib.IMAP4_SSL(imap_url)
+        my_mail.login(user, password)
+        my_mail.select('Inbox')
 
-            _, data = my_mail.search(None, search_criteria)
-            if not data[0]:
-                print(f"❌ No emails found.")
-                my_mail.logout()
-                return None  # No emails found
+        search_criteria = f'SINCE "{current_date}"'
+        _, data = my_mail.search(None, search_criteria)
+        if not data[0]:
+            print(f"❌ No emails found.")
+            my_mail.logout()
+            return None  # No emails found
 
-            mail_id_list = data[0].split()
-            print(f"\n📬 Found {len(mail_id_list)} emails.\n")
+        mail_id_list = data[0].split()
+        print(f"\n📬 Found {len(mail_id_list)} emails.\n")
 
-            msgs = []
-            email_details = []  # Collect email details (sender, subject, body)
+        msgs = []
+        email_details = []  # Collect email details (sender, subject, body)
 
-            for num in mail_id_list:
-                typ, data = my_mail.fetch(num, '(RFC822)')
-                msgs.append(data)
+        for num in mail_id_list:
+            typ, data = my_mail.fetch(num, '(RFC822)')
+            msgs.append(data)
 
-            for msg in msgs[::-1]:
-                for response_part in msg:
-                    if isinstance(response_part, tuple):
-                        my_msg = email.message_from_bytes(response_part[1])
-                        subject = my_msg['subject']
-                        sender_email = my_msg['from']
-                        body = ""
+        for msg in msgs[::-1]:
+            for response_part in msg:
+                if isinstance(response_part, tuple):
+                    my_msg = email.message_from_bytes(response_part[1])
+                    subject = my_msg['subject']
+                    sender_email = my_msg['from']
+                    body = ""
 
-                        # Get the body of the email
-                        for part in my_msg.walk():
-                            if part.get_content_type() == 'text/plain':
-                                body = part.get_payload(decode=True).decode()
+                    # Get the body of the email
+                    for part in my_msg.walk():
+                        if part.get_content_type() == 'text/plain':
+                            body = part.get_payload(decode=True).decode()
 
-                        # Store the subject, sender, and body for summarization
-                        email_details.append({
-                            'subject': subject,
-                            'sender': sender_email,
-                            'body': body
-                        })
+                    # Store the subject, sender, and body for summarization
+                    email_details.append({
+                        'subject': subject,
+                        'sender': sender_email,
+                        'body': body
+                    })
 
-            # Check if email details were found
-            if not email_details:
-                print("❌ No email details found.")
-                return None
-
-            print("📧 Summarizing email details...\n")
-
-            # Prepare the email details to be analyzed by the OpenAI GPT model
-            formatted_email_details = ""
-            for index,email_info in enumerate(email_details):
-                formatted_email_details += f"Email:{index} Subject: {email_info['subject']}\nFrom: {email_info['sender']}\nBody: {email_info['body']}\n\n"
-
-            # Call the OpenAI GPT model to assess the importance of each email
-            try:
-                response = client.chat.completions.create(
-                    model="gpt-4o",  # You can choose another GPT model
-                    messages=[
-                        {
-                            'role': 'system',
-                            'content': f'''
-                            You are an AI designed to assess the importance of multiple emails,each email has its own index please give me a index sequence which order means importance based on their content. Below are the details of the emails:
-
-                            {formatted_email_details}
-
-                            The output should be in the format of email indices, such as: 0,1,2 or 1,0,2, etc.
-
-                            No explanation is needed.
-                            '''
-                        }
-                    ]
-                )
-
-                importance_order = response.choices[0].message.content
-                importance_list = [email_details[int(index)] for index in importance_order.split(",")]
-                high_importance_list = importance_list[0]
-                low_importance_list = importance_list[1:]
-                print(f"{importance_list}")
-                return high_importance_list, low_importance_list
-
-            except Exception as e:
-                print(f"❌ Error in OpenAI processing: {e}")
-                return None
-
-        except Exception as e:
-            print(f"❌ Error: {e}")
+        # Check if email details were found
+        if not email_details:
+            print("❌ No email details found.")
             return None
-        
-    def send_low_email(self, low_importance_list):
+
+        print("📧 Summarizing email details...\n")
+
+        # Prepare the email details to be analyzed by the OpenAI GPT model
+        formatted_email_details = ""
+        for index, email_info in enumerate(email_details):
+            formatted_email_details += f"Email:{index} Subject: {email_info['subject']}\nFrom: {email_info['sender']}\nBody: {email_info['body']}\n\n"
+
+        # Call the OpenAI GPT model to assess the importance of each email
         try:
-            # Loop through each email in the prioritized list
-            for email_info in list(low_importance_list):
-                # Ensure the email_info is a dictionary and contains the expected fields
-                print(f"Processing Email: {email_info}")  # Debugging line
+            response = client.chat.completions.create(
+                model="gpt-4o",  # You can choose another GPT model
+                messages=[
+                    {
+                        'role': 'system',
+                        'content': f'''
+                        You are an AI designed to assess the importance of multiple emails. Each email has its own index. Please give me an index sequence which order means importance based on their content. Below are the details of the emails:
 
-                # Extract Subject, Sender, and Body of the email
-                subject = email_info['subject']
-                sender_email = email_info['sender']
-                body = email_info['body']
+                        {formatted_email_details}
 
-                # Generate a reply using OpenAI (LLM)
-                try:
-                    # Prompt OpenAI to generate the email response
-                    response = client.chat.completions.create(
-                        model="gpt-4o",  # Choose the model
-                        messages=[{
-                            'role': 'system',
-                            'content': f'''
-                                You are Vaibhav Mehra's AI assistant. Based on the email below, generate a reply:
-                                - Subject: {subject}
-                                - From: {sender_email}
-                                - Body: {body}
-                                
-                                Please generate the response with the following format:
-                                Recipient_email: [email]
-                                Subject: [subject]
-                                Body: [body]
-                            '''
-                        }]
-                    )
+                        The output should be in the format of email indices, such as: 0,1,2 or 1,0,2, etc.
 
-                    # Print the OpenAI response for debugging
-                    generated_content = response.choices[0].message.content
-                    print(f"Generated Content: {generated_content}")  # Debugging line
+                        No explanation is needed.
+                        '''
+                    }
+                ]
+            )
 
-                    # Parse the response content from OpenAI
-                    recipient_email, generated_subject, generated_body = self.parse_generated_content(generated_content)
+            importance_order = response.choices[0].message.content
+            importance_list = [email_details[int(index)] for index in importance_order.split(",")]
+            high_importance_list = importance_list[0]
+            low_importance_list = importance_list[1:]
+            print(f"{importance_list}")
+            return high_importance_list, low_importance_list
 
-                    if not recipient_email:
-                        print(f"❌ No recipient email found for email from {sender_email}.")
-                        continue  # Skip to the next email if no recipient is found
-
-                    print(f"Generated Recipient: {recipient_email}")
-                    print(f"Generated Subject: {generated_subject}")
-                    print(f"Generated Body:\n{generated_body}")
-
-                except Exception as e:
-                    print(f"❌ Error generating reply for email from {sender_email}: {str(e)}")
-                    continue  # Skip to the next email if there is an error
-
-                # Create the email message with the generated content
-                msg = MIMEMultipart()
-                msg['From'] = self.user  # Sender's email address
-                msg['To'] = recipient_email  # Recipient's email address
-                msg['Subject'] = generated_subject  # Email subject
-                msg.attach(MIMEText(generated_body, 'plain'))  # Attach the body with MIMEText
-
-                # Send the email via SMTP
-                try:
-                    smtp_server = "smtp.gmail.com"
-                    smtp_port = 587
-                    server = smtplib.SMTP(smtp_server, smtp_port)
-                    server.starttls()  # Start TLS encryption
-                    server.login(self.user, self.password)  # Login with credentials
-                    server.send_message(msg)  # Send the email
-                    print(f"✅ Email sent successfully to {recipient_email}!")
-
-                except Exception as e:
-                    print(f"❌ Failed to send email to {recipient_email}: {str(e)}")
-                
-                finally:
-                    server.quit()  # Quit the SMTP server connection
-                    print("✅ SMTP session ended.")
-        
         except Exception as e:
-            print(f"❌ Error in send_email function: {str(e)}")
+            print(f"❌ Error in OpenAI processing: {e}")
+            return None
 
-    def analyze_and_send_high_emails(self, high_importance_list):
-        print("\n" + "=" * 50)
-        print("📧 ANALYZING HIGH PRIORITY EMAIL")
-        print("=" * 50 + "\n")
+    except Exception as e:
+        print(f"❌ Error: {e}")
+        return None
 
-        try:
-            # Extract email information
-            subject = high_importance_list['subject']
-            sender_email = high_importance_list['sender']
-            body = high_importance_list['body']
 
-            # Generate 3 different response templates using GPT-4
+def send_low_email(user, password, low_importance_list):
+    """Sends a response to emails with low importance."""
+    try:
+        # Loop through each email in the prioritized list
+        for email_info in list(low_importance_list):
+            print(f"Processing Email: {email_info}")  # Debugging line
+
+            # Extract Subject, Sender, and Body of the email
+            subject = email_info['subject']
+            sender_email = email_info['sender']
+            body = email_info['body']
+
+            # Generate a reply using OpenAI (LLM)
             try:
                 response = client.chat.completions.create(
-                    model="gpt-4o",
+                    model="gpt-4o",  # Choose the model
                     messages=[{
                         'role': 'system',
                         'content': f'''
-                            You are Vaibhav Mehra's AI assistant. Based on the email below, generate 3 different response templates:
+                            You are Vaibhav Mehra's AI assistant. Based on the email below, generate a reply:
                             - Subject: {subject}
                             - From: {sender_email}
                             - Body: {body}
-                            
-                            Please generate THREE different responses with the following format:
-                            
-                            Template 1:
-                            Recipient_email: [email]
-                            Subject: [subject]
-                            Body: [formal response]
 
-                            Template 2:
+                            Please generate the response with the following format:
                             Recipient_email: [email]
                             Subject: [subject]
-                            Body: [casual but professional response]
-
-                            Template 3:
-                            Recipient_email: [email]
-                            Subject: [subject]
-                            Body: [concise and direct response]
+                            Body: [body]
                         '''
                     }]
                 )
 
-                # Print the templates for review
-                print("\n📝 Generated Response Templates:")
-                print("=" * 50)
-                print(response.choices[0].message.content)
-                print("=" * 50)
-                print("\nPlease review these templates and use them to compose your response.")
+                generated_content = response.choices[0].message.content
+                print(f"Generated Content: {generated_content}")  # Debugging line
+
+                # Parse the response content from OpenAI
+                recipient_email, generated_subject, generated_body = parse_generated_content(generated_content)
+
+                if not recipient_email:
+                    print(f"❌ No recipient email found for email from {sender_email}.")
+                    continue
+
+                print(f"Generated Recipient: {recipient_email}")
+                print(f"Generated Subject: {generated_subject}")
+                print(f"Generated Body:\n{generated_body}")
 
             except Exception as e:
-                print(f"❌ Error generating templates: {str(e)}")
-                return
+                print(f"❌ Error generating reply for email from {sender_email}: {str(e)}")
+                continue  # Skip to the next email if there is an error
 
-        except Exception as e:
-            print(f"❌ Error in analyze_and_send_high_emails: {str(e)}")
+            # Create the email message with the generated content
+            msg = MIMEMultipart()
+            msg['From'] = user  # Sender's email address
+            msg['To'] = recipient_email  # Recipient's email address
+            msg['Subject'] = generated_subject  # Email subject
+            msg.attach(MIMEText(generated_body, 'plain'))  # Attach the body with MIMEText
 
-    def parse_generated_content(self, generated_content):
+            # Send the email via SMTP
+            try:
+                smtp_server = "smtp.gmail.com"
+                smtp_port = 587
+                server = smtplib.SMTP(smtp_server, smtp_port)
+                server.starttls()  # Start TLS encryption
+                server.login(user, password)  # Login with credentials
+                server.send_message(msg)  # Send the email
+                print(f"✅ Email sent successfully to {recipient_email}!")
+
+            except Exception as e:
+                print(f"❌ Failed to send email to {recipient_email}: {str(e)}")
+            
+            finally:
+                server.quit()  # Quit the SMTP server connection
+                print("✅ SMTP session ended.")
+
+    except Exception as e:
+        print(f"❌ Error in send_email function: {str(e)}")
+
+def analyze_and_send_high_emails(high_importance_list):
+    """Generates and reviews response templates for high priority emails."""
+    print("\n" + "=" * 50)
+    print("📧 ANALYZING HIGH PRIORITY EMAIL")
+    print("=" * 50 + "\n")
+
+    try:
+        # Extract email information
+        subject = high_importance_list['subject']
+        sender_email = high_importance_list['sender']
+        body = high_importance_list['body']
+
         try:
-            print(f"Parsing generated content: {generated_content}")  # Debugging line
-            # Split the response into its components: recipient, subject, and body
-            lines = generated_content.strip().split('\n')
-            print(f"Lines after splitting: {lines}")  # Debugging line
+            response = client.chat.completions.create(
+                model="gpt-4o",
+                messages=[{
+                        'role': 'system',
+                        'content': f'''
+                            You are Vaibhav Mehra's AI assistant. Based on the email below, generate a reply:
+                            - Subject: {subject}
+                            - From: {sender_email}
+                            - Body: {body}
 
-            recipient_email = lines[0].split(':')[-1].strip()
-            subject = lines[1].split(':')[-1].strip()
-            body = '\n'.join(lines[2:]).strip()
+                            Please generate the response with the following format:
+                            Recipient_email: [email]
+                            Subject: [subject]
+                            Body: [body]
+                        '''
+                    }]
+            )
 
-            return recipient_email, subject, body
+            print("\n📝 Generated Response Templates:")
+            print("=" * 50)
+            print(response.choices[0].message.content)
+            print("=" * 50)
+            print("\nPlease review these templates and use them to compose your response.")
+
         except Exception as e:
-            print(f"❌ Error parsing generated content: {str(e)}")
-            return None, None, None
+            print(f"❌ Error generating templates: {str(e)}")
+            return
+
+    except Exception as e:
+        print(f"❌ Error in analyze_and_send_high_emails: {str(e)}")
 
 
+def parse_generated_content(generated_content):
+    """Parses the response generated by OpenAI into recipient email, subject, and body."""
+    try:
+        lines = generated_content.strip().split('\n')
+        recipient_email = lines[0].split(':')[-1].strip()  # Extract recipient email
+        subject = lines[1].split(':')[-1].strip()  # Extract subject
+        # Combine everything after "Body:" label to form the body content
+        body = '\n'.join(lines[2:]).strip()  # Start after the "Body:" line
+
+        return recipient_email, subject, body
+    except Exception as e:
+        print(f"❌ Error parsing generated content: {str(e)}")
+        return None, None, None
 
 
 
 # Run the agent
-agent = email_agent()
-high_priority_list,low_priority_list = agent.analyze_prior_emails()
-# agent.send_low_email(low_priority_list)
-agent.analyze_and_send_high_emails(high_priority_list)
+user, password = load_credentials()
+high_priority_list, low_priority_list = analyze_prior_emails(user, password)
+send_low_email(user, password, low_priority_list)
+analyze_and_send_high_emails(high_priority_list)
