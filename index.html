@@ -1,47 +1,285 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Granite 8B Stream</title>
+    <title>Animated Logo</title>
+    <style>
+        body {
+            margin: 0;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: #fff;
+            background: radial-gradient(circle at center, #ffffff, #f8f9fa);
+        }
+        
+        .logo-container {
+            position: relative;
+            width: 120px;
+            height: 120px;
+            animation: spin 8s linear infinite;
+            filter: drop-shadow(0 0 15px rgba(66, 99, 235, 0.2));
+            transition: all 0.8s ease-in-out;
+        }
+
+        .logo-container.minimized {
+            transform: scale(0.4);
+            width: 48px;  /* 40% of original 120px */
+            height: 48px; /* 40% of original 120px */
+        }
+
+        .dot {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: linear-gradient(45deg, #2b3595, #4263eb);
+            box-shadow: 0 0 8px rgba(66, 99, 235, 0.6);
+            opacity: 0;
+            transform-origin: center;
+            transition: all 0.8s ease-in-out;
+        }
+
+        .logo-container.minimized .dot {
+            width: 4px;  /* 40% of original 10px */
+            height: 4px; /* 40% of original 10px */
+        }
+
+        .dot:nth-child(3n) {
+            background: linear-gradient(45deg, #4263eb, #5c7cfa);
+        }
+
+        .dot:nth-child(3n+1) {
+            background: linear-gradient(45deg, #364fc7, #7048e8);
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .outer-glow {
+            position: absolute;
+            width: 140px;
+            height: 140px;
+            border-radius: 50%;
+            background: transparent;
+            border: 2px solid rgba(66, 99, 235, 0.1);
+            animation: pulse 2s ease-in-out infinite;
+            left: -10px;
+            top: -10px;
+        }
+
+        @keyframes pulse {
+            0% {
+                transform: scale(0.95);
+                border-color: rgba(66, 99, 235, 0.1);
+            }
+            50% {
+                transform: scale(1.05);
+                border-color: rgba(66, 99, 235, 0.3);
+            }
+            100% {
+                transform: scale(0.95);
+                border-color: rgba(66, 99, 235, 0.1);
+            }
+        }
+
+        .logo-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            transition: all 0.8s ease-in-out;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        .logo-wrapper.minimized {
+            top: 20px;
+            left: 20px;
+            transform: scale(0.4) translate(0, 0);
+            transform-origin: center center;
+        }
+
+        .logo-wrapper.minimized .logo-container {
+            animation: none;
+        }
+
+        .logo-wrapper.minimized .logo-container {
+            animation: none;
+        }
+
+        .logo-wrapper.minimized .dot {
+            width: 6px;
+            height: 6px;
+            left: calc(60px + (50px * cos(var(--angle))));
+            top: calc(60px + (50px * sin(var(--angle))));
+        }
+
+        .logo-text {
+            font-family: 'Arial', sans-serif;
+            font-size: 72px;
+            font-weight: bold;
+            background: linear-gradient(45deg, #0a1248, #5c7cfa);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            margin-left: 25px;
+            text-shadow: 0 0 15px rgba(66, 99, 235, 0.4);
+            position: relative;
+            overflow: hidden;
+            transition: all 0.8s ease-in-out;
+        }
+
+        .logo-text.minimized {
+            font-size: 28px;
+        }
+
+        .logo-text::after {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: linear-gradient(
+                45deg,
+                transparent 45%,
+                rgba(255, 255, 255, 0.9) 50%,
+                transparent 55%
+            );
+            animation: shimmer 6s infinite;
+            transform: translateX(-100%) rotate(45deg);
+        }
+
+        @keyframes shimmer {
+            0% { transform: translateX(-100%) rotate(45deg); }
+            100% { transform: translateX(100%) rotate(45deg); }
+        }
+
+        .logo-text:hover {
+            transform: scale(1.02);
+            transition: transform 0.3s ease;
+        }
+
+        #transcription {
+            margin: 20px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            min-height: 50px;
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+        }
+
+        @keyframes fade {
+            0%, 100% { 
+                opacity: 0.2;
+                transform: scale(0.8);
+            }
+            50% { 
+                opacity: 1;
+                transform: scale(1.1);
+            }
+        }
+
+        .dot {
+            transition: all 0.8s ease-in-out;
+        }
+
+        .logo-text {
+            transition: all 0.8s ease-in-out;
+        }
+    </style>
+    <script>
+        let welcomeMessagePlayed = false;
+
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize logo animation
+            const container = document.querySelector('.logo-container');
+            const numDots = 28;
+            
+            for (let i = 0; i < numDots; i++) {
+                const dot = document.createElement('div');
+                dot.className = 'dot';
+                
+                const angle = (i / numDots) * 2 * Math.PI;
+                const radius = 50;
+                const x = radius * Math.cos(angle);
+                const y = radius * Math.sin(angle);
+                
+                dot.style.left = `${60 + x}px`;
+                dot.style.top = `${60 + y}px`;
+                dot.style.animation = `fade 2s ease-in-out infinite`;
+                dot.style.animationDelay = `${i * (2 / numDots)}s`;
+                
+                container.appendChild(dot);
+            }
+
+            // Play welcome message only once
+            if (!welcomeMessagePlayed) {
+                welcomeMessagePlayed = true;
+                fetch('/play-welcome')
+                    .catch(error => console.error('Error playing welcome message:', error));
+            }
+
+            // Initialize transcription
+            const transcriptionDiv = document.createElement('div');
+            transcriptionDiv.id = 'transcription';
+            document.body.appendChild(transcriptionDiv);
+
+            let isRecording = false;
+
+            // Handle space bar press down
+            document.addEventListener('keydown', function(event) {
+                if (event.code === 'Space' && !isRecording) {
+                    event.preventDefault();
+                    isRecording = true;
+                    transcriptionDiv.textContent = 'Recording...';
+                    
+                    fetch('/start_recording', { 
+                        method: 'POST'
+                    })
+                    .catch(error => console.error('Error starting recording:', error));
+                }
+            });
+
+            // Handle space bar release
+            document.addEventListener('keyup', function(event) {
+                if (event.code === 'Space' && isRecording) {
+                    isRecording = false;
+                    fetch('/stop_recording', {
+                        method: 'POST'
+                    })
+                    .then(response => response.text())
+                    .then(text => {
+                        transcriptionDiv.textContent = text;
+                        
+                        // Minimize and move the logo after transcription
+                        const logoWrapper = document.querySelector('.logo-wrapper');
+                        const logoContainer = document.querySelector('.logo-container');
+                        const logoText = document.querySelector('.logo-text');
+                        
+                        logoWrapper.classList.add('minimized');
+                        logoContainer.classList.add('minimized');
+                        logoText.classList.add('minimized');
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        transcriptionDiv.textContent = 'Error: ' + error;
+                    });
+                }
+            });
+        });
+    </script>
 </head>
 <body>
-    <h1>Granite 8B Streaming</h1>
-    <form id="chat-form">
-        <input type="text" name="user_input" id="user-input" required>
-        <button type="submit">Send</button>
-    </form>
-    <div id="response-area"></div>
-
-    <script>
-    document.getElementById('chat-form').onsubmit = function(e) {
-        e.preventDefault();
-        const responseArea = document.getElementById('response-area');
-        responseArea.innerHTML = 'Loading...';
-        
-        fetch('/', {
-            method: 'POST',
-            body: new FormData(e.target)
-        })
-        .then(response => {
-            const reader = response.body.getReader();
-            responseArea.innerHTML = '';
-            
-            function readStream() {
-                reader.read().then(({done, value}) => {
-                    if (done) return;
-                    const text = new TextDecoder().decode(value);
-                    responseArea.innerHTML += text;
-                    readStream();
-                });
-            }
-            
-            readStream();
-        })
-        .catch(error => {
-            responseArea.innerHTML = 'Error: ' + error;
-        });
-    };
-    </script>
+    <div class="logo-wrapper">
+        <div class="logo-container"></div>
+        <div class="logo-text">Echelon</div>
+    </div>
 </body>
 </html>
