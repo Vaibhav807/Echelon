@@ -20,26 +20,9 @@ class email_agent:
             self.task = task
             self.current_date = datetime.now().strftime("%d-%b-%Y")
     
-    def extract_sender_from_task(self):
-        """
-        Extract the sender's name or email address from the task description.
-        If no sender is explicitly mentioned, default to 'ALL' (meaning all senders).
-        """
-        match = re.search(r"from ([\w\.-]+@[\w\.-]+|\w+)", self.task, re.IGNORECASE)
-        if match:
-            sender = match.group(1)
-            return sender
-        else:
-            # If no sender is specified, return 'ALL'
-            return "ALL"
-
     def retrieve_emails(self):
-        sender = self.extract_sender_from_task()
+        sender = "ALL"  # Always use "ALL"
         
-        if not sender:
-            print("❌ No sender specified in the task.")
-            return []
-
         print(f"\n📧 RETRIEVING EMAILS from {sender}")
         print("="*50 + "\n")
         
@@ -49,8 +32,8 @@ class email_agent:
             my_mail.login(self.user, self.password)
             my_mail.select('Inbox')
 
-            # Search emails from the specified sender
-            search_criteria = f'(FROM "{sender}")'
+            # Always retrieve emails from "ALL"
+            search_criteria = f"(ALL)"
             try:
                 my_mail.noop()
             except:
@@ -60,12 +43,12 @@ class email_agent:
             
             _, data = my_mail.search(None, search_criteria)
             if not data[0]:
-                print(f"\n❌ No emails found from {sender}.")
+                print(f"\n❌ No emails found.")
                 my_mail.logout()
                 return []
             
             mail_id_list = data[0].split()
-            print(f"\n📬 Found {len(mail_id_list)} emails from {sender}.\n")
+            print(f"\n📬 Found {len(mail_id_list)} emails.\n")
 
             msgs = []
             email_bodies = []  # Collect email bodies for summarization
@@ -108,9 +91,8 @@ class email_agent:
             except:
                 pass
     
-    def summarize_emails(self,prompt = "You are a summarization assistant. Please summarize the following emails."):    
-        # Extract the sender (it could be 'ALL' if not specified)
-        sender = self.extract_sender_from_task()
+    def summarize_emails(self, prompt=None):    
+        sender = "ALL"  # Always use "ALL"
         
         print(f"\n📧 SUMMARIZING EMAILS from {sender}")
         print("="*50 + "\n")
@@ -122,12 +104,9 @@ class email_agent:
             my_mail.login(self.user, self.password)
             my_mail.select('Inbox')
 
-            # Modify search criteria for 'ALL' (retrieve all emails)
-            if sender == "ALL":
-                search_criteria = "ALL"
-            else:
-                search_criteria = f'(FROM "{sender}")'
-
+            # Always use "ALL" for search criteria
+            search_criteria = "ALL"
+            
             try:
                 my_mail.noop()
             except:
@@ -137,15 +116,15 @@ class email_agent:
             
             _, data = my_mail.search(None, search_criteria)
             if not data[0]:
-                print(f"\n❌ No emails found from {sender}.")
+                print(f"\n❌ No emails found.")
                 my_mail.logout()
                 return None  # No emails found
 
             mail_id_list = data[0].split()
-            print(f"\n📬 Summarizing {len(mail_id_list)} emails from {sender}.\n")
+            print(f"\n📬 Summarizing {len(mail_id_list)} emails.\n")
 
             msgs = []
-            email_bodies = []  # Collect email bodies for summarization
+            email_details = []  # Collect email details (sender, subject, body) for summarization
             
             for num in mail_id_list:
                 typ, data = my_mail.fetch(num, '(RFC822)')
@@ -164,21 +143,27 @@ class email_agent:
                             if part.get_content_type() == 'text/plain':
                                 body = part.get_payload(decode=True).decode()
 
-                        email_bodies.append(body)  # Store the email body
+                        # Collecting subject, sender, and body in a structured format
+                        email_details.append({
+                            'subject': subject,
+                            'sender': sender_email,
+                            'body': body
+                        })
 
-            # Summarize the collected email bodies (only the bodies as plain text)
-            if email_bodies:
+            # Create a formatted string that includes the subject, sender, and body for each email
+            if email_details:
                 try:
-                    # Join all email bodies into one string, separating them with newlines
-                    combined_body = "\n\n".join(email_bodies)
+                    combined_details = ""
+                    for email_details_entry in email_details:  # Renamed variable
+                        combined_details += f"Subject: {email_details_entry['subject']}\nFrom: {email_details_entry['sender']}\nBody:\n{email_details_entry['body']}\n\n"
                     
-                    # Pass the combined body text to the summarization model
+                    # Pass the combined details to the summarization model
                     response = chat(model='granite3.1-dense:8b', messages=[{
                         'role': 'system',
-                        'content': f"{prompt}"
+                        'content': f"{self.task}"
                     }, {
                         'role': 'user',
-                        'content': combined_body
+                        'content': combined_details
                     }])
 
                     summary = response['message']['content']
@@ -189,7 +174,7 @@ class email_agent:
                     print(f"Error summarizing emails: {str(e)}")
                     return "Summary could not be generated."
             else:
-                print("❌ No email bodies found to summarize.")
+                print("❌ No email details found to summarize.")
                 return None
 
         except Exception as e:
@@ -202,104 +187,176 @@ class email_agent:
                 pass
 
     def send_email(self, attachments=None):
-        print("\n" + "="*50)
-        print("📧 SUMMARIZING EMAILS FIRST")
-        print("="*50 + "\n")
+        sender = "ALL"  # Always use "ALL"
         
-        # First, summarize the emails
-        summary = self.summarize_emails(prompt = '''You are an email summarization assistant. Summarize the following emails by providing a dictionary where each key is the sender's email address, and the value is the summary of the email content. Format it as follows:
-                                                    {
-                                                        "email address of person1": "Summary of the email content of person1",
-                                                        "email address of person2": "Summary of the email content of person2",
-                                                        ...
-                                                    }''')
-        print(summary)
+        print("\n" + "=" * 50)
+        print("📧 RETRIEVING AND SUMMARIZING EMAILS")
+        print("=" * 50 + "\n")
         
-        if not summary:
-            print("❌ No summary available, cannot generate email.")
-            return
-        
-        print("\n" + "="*50)
-        print("📤 GENERATING EMAIL CONTENT")
-        print("="*50 + "\n")
-
         try:
+            # Connect to the Gmail IMAP server
+            imap_url = 'imap.gmail.com'
+            my_mail = imaplib.IMAP4_SSL(imap_url)
+            my_mail.login(self.user, self.password)
+            my_mail.select('Inbox')
 
-            # Generate subject and body using the summarization and task context
-            response = chat(model='granite3.1-dense:8b', messages=[{
-                'role': 'system',
-                'content': f"You are an email assistant. Write an email based on the following summary: {summary}"
-            }])
+            # Always use "ALL" for search criteria
+            search_criteria = "ALL"
+            
+            _, data = my_mail.search(None, search_criteria)
+            if not data[0]:
+                print(f"❌ No emails found.")
+                my_mail.logout()
+                return None  # No emails found
 
-            # Get the email content generated by the LLM
-            generated_content = response['message']['content']
+            mail_id_list = data[0].split()
+            print(f"\n📬 Found {len(mail_id_list)} emails.\n")
 
-            # Split the generated content into subject and body
-            lines = generated_content.split('\n')
-            subject = lines[0].strip()  # The first line is the subject
-            body = "\n".join(lines[1:]).strip()  # The rest is the body
+            msgs = []
+            email_details = []  # Collect email details (sender, subject, body)
+            
+            for num in mail_id_list:
+                typ, data = my_mail.fetch(num, '(RFC822)')
+                msgs.append(data)
 
-            print(f"Generated Recipient: {recipient_email}")
-            print(f"Generated Subject: {subject}")
-            print(f"Generated Body:\n{body}")
+            for msg in msgs[::-1]:
+                for response_part in msg:
+                    if isinstance(response_part, tuple):
+                        my_msg = email.message_from_bytes(response_part[1])
+                        subject = my_msg['subject']
+                        sender_email = my_msg['from']
+                        body = ""
+
+                        # Get the body of the email
+                        for part in my_msg.walk():
+                            if part.get_content_type() == 'text/plain':
+                                body = part.get_payload(decode=True).decode()
+
+                        # Store the subject, sender, and body for summarization
+                        email_details.append({
+                            'subject': subject,
+                            'sender': sender_email,
+                            'body': body
+                        })
+
+            # Check if email details were found
+            if not email_details:
+                print("❌ No email details found.")
+                return None
+
+            print("📧 Summarizing email details...\n")
+
+            # Prepare the email details for the model
+            formatted_email_details = ""
+            for email_info in email_details:
+                formatted_email_details += f"Subject: {email_info['subject']}\nFrom: {email_info['sender']}\nBody: {email_info['body']}\n\n"
+
+            # Generate email content based on the summary
+            try:
+                response = chat(model='granite3.1-dense:8b', messages=[{
+                    'role': 'system',
+                    'content': f'''
+                        You are Vaibhav Mehra with the email address of granite.hackathon.test@gmail.com. Your task is to send an email(s) to complete the task: {self.task}.
+                        You have access to the following email history:
+                        {formatted_email_details}
+                        
+                        Based on this, generate an email with the following format:
+                        Recipient_email: [recipient_email]
+                        Subject: [subject]
+                        Body: [body]
+                    '''
+                }])
+
+                # Extract the email content generated by the model
+                generated_content = response['message']['content']
+
+                # Parse the generated content to extract recipient email, subject, and body
+                recipient_email, subject, body = self.parse_generated_content(generated_content)
+
+                if not recipient_email:
+                    print("❌ No recipient email found.")
+                    return
+
+                print(f"Generated Recipient: {recipient_email}")
+                print(f"Generated Subject: {subject}")
+                print(f"Generated Body:\n{body}")
+
+            except Exception as e:
+                print(f"❌ Error generating email content: {str(e)}")
+                return
+
+            # Create the email message with the generated content
+            msg = MIMEMultipart()
+            msg['From'] = self.user  # Sender's email address
+            msg['To'] = recipient_email  # Recipient's email address
+            msg['Subject'] = subject  # Email subject
+            msg.attach(MIMEText(body, 'plain'))  # Attach the body with MIMEText
+            
+            # Attach files if any
+            if attachments:
+                for file_path in attachments:
+                    if os.path.exists(file_path):
+                        try:
+                            with open(file_path, 'rb') as f:
+                                attachment = MIMEApplication(f.read(), _subtype=os.path.splitext(file_path)[1][1:])
+                                attachment.add_header('Content-Disposition', 'attachment', filename=os.path.basename(file_path))
+                                msg.attach(attachment)
+                                print(f"📎 Attachment {os.path.basename(file_path)} added.")
+                        except Exception as e:
+                            print(f"❌ Error reading attachment file {file_path}: {str(e)}")
+                            continue
+
+            # Send the email via SMTP
+            try:
+                smtp_server = "smtp.gmail.com"
+                smtp_port = 587
+                server = smtplib.SMTP(smtp_server, smtp_port)
+                server.starttls()  # Start TLS encryption
+                server.login(self.user, self.password)  # Login with credentials
+                server.send_message(msg)  # Send the email
+                print("✅ Email sent successfully!")
+
+            except Exception as e:
+                print(f"❌ Failed to send email: {str(e)}")
+            
+            finally:
+                server.quit()  # Quit the SMTP server connection
+                print("✅ SMTP session ended.")
 
         except Exception as e:
-            print(f"❌ Error generating email content: {str(e)}")
-            return
-
-        # Create the email message with the generated content
-        msg = MIMEMultipart()
-        msg['From'] = self.user  # Sender's email address
-        msg['To'] = recipient_email  # Recipient's email address
-        msg['Subject'] = subject  # Email subject
-        
-        # Attach the body with MIMEText
-        msg.attach(MIMEText(body, 'plain'))
-        
-        # If there are attachments, attach them to the email
-        if attachments:
-            for file_path in attachments:
-                if os.path.exists(file_path):
-                    try:
-                        # Open the attachment file and read its content
-                        with open(file_path, 'rb') as f:
-                            attachment = MIMEApplication(f.read(), _subtype=os.path.splitext(file_path)[1][1:])
-                            attachment.add_header('Content-Disposition', 'attachment', filename=os.path.basename(file_path))
-                            msg.attach(attachment)
-                            print(f"📎 Attachment {os.path.basename(file_path)} added.")
-                    except Exception as e:
-                        print(f"❌ Error reading attachment file {file_path}: {str(e)}")
-                        continue
-
-        try:
-            # Connect to the Gmail SMTP server
-            smtp_server = "smtp.gmail.com"
-            smtp_port = 587
-            server = smtplib.SMTP(smtp_server, smtp_port)
-            
-            # Start TLS encryption
-            server.starttls()
-            
-            # Login to the SMTP server with the user's credentials
-            server.login(self.user, self.password)
-            print("✅ Logged in to SMTP server successfully.")
-            
-            # Send the email
-            server.send_message(msg)
-            print("✅ Email sent successfully!")
-            
-            self.info += f"Sent email to: {recipient_email}\nSubject: {subject}\n"
-            
-        except Exception as e:
-            print(f"❌ Failed to send email: {str(e)}")
-            self.info += f"❌ Error sending email to {recipient_email}: {str(e)}\n"
+            print(f"❌ Error retrieving emails: {str(e)}")
         
         finally:
             try:
-                server.quit()  # Quit the SMTP server connection
-                print("✅ SMTP session ended.")
+                my_mail.logout()  # Logout from the IMAP server
             except:
                 pass
+
+    def parse_generated_content(self, content):
+        """
+        Parse the generated content into recipient_email, subject, and body.
+        """
+        recipient_email = ""
+        subject = ""
+        body = ""
+        
+        lines = content.split('\n')
+        collecting_body = False
+        
+        for line in lines:
+            line = line.strip()  # Remove any extra spaces
+            
+            if line.startswith('Recipient_email:'):
+                recipient_email = line.replace('Recipient_email:', '').strip()
+            elif line.startswith('Subject:'):
+                subject = line.replace('Subject:', '').strip()
+            elif line.startswith('Body:'):
+                collecting_body = True
+                body = line.replace('Body:', '').strip()
+            elif collecting_body:
+                body += "\n" + line.strip()  # Append the rest of the body content
+
+        return recipient_email, subject, body
 
     def create_task_plan(self, task_description):
         print(f"\n=== Creating Task Plan for: {task_description} ===")
@@ -348,7 +405,8 @@ class email_agent:
                 print(f"Error executing {tool}: {str(e)}")
 
 # Example task
-task = "tell me all different emails addresses"
+task = "Summerize all different emails addresses"
+# task = "send email to guanming and reply about my interview feasibility"
 agent = email_agent(task)
 plan = agent.create_task_plan(task)
 agent.execute_task_plan(plan)
