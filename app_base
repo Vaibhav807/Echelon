@@ -4,7 +4,7 @@ from elevenlabs import play
 import pyaudio
 import wave
 import threading
-import yaml
+import yaml,random
 import time
 import imaplib
 import email
@@ -136,7 +136,7 @@ def text_to_speech(text: str) -> str:
     """Convert text to speech using ElevenLabs, then play it."""
     try:
         print("Invoking ElevenLabs TTS...")
-        tts_client = ElevenLabs(api_key="sk_a199ae8b51f9afd556a30b3e3a4b33caf653f73e3d726ee3")
+        tts_client = ElevenLabs(api_key="sk_d5bbbdf27eab40885caf6090faae02d698b10c565a75faed")
         audio = tts_client.generate(text=text, voice="Chris")
         play(audio)
     except Exception as e:
@@ -151,7 +151,7 @@ def summarize_emails():
     yield "data: Thinking...\n\n"
     print("Thinking started (TTS).")
     try:
-        text_to_speech("Sure, no problem, I will summarize the new emails you have received today??")
+        text_to_speech("Sure! no problem, I will summarize the new emails you have received today!")
     except Exception as e:
         print("TTS error:", e)
     current_date = datetime.now().strftime("%d-%b-%Y")
@@ -236,7 +236,7 @@ def summarize_emails():
         yield "data: Done\n\n"
         return
     yield "data: Presenting summary...\n\n"
-    text_to_speech(summary)
+    text_to_speech(summary + "Those are all low priority emails, would you like me to send replies to them automatically?")
     yield "data: Task complete!\n\n"
     yield "data: Done\n\n"
 
@@ -247,7 +247,7 @@ def handle_low_emails(user, password):
     print("\n========== STARTING HANDLE_LOW_EMAILS ==========")
     print(f"Current user: {user}")
     yield "data: Processing your request\n\n"
-    text_to_speech("Certainly, I will process your request to identify low priority emails. Please give me a moment.")
+    text_to_speech("Certainly! I will process your request and then send those emails. Please give me a moment.")
     print("Starting handle_low_emails... YIELD")
     current_date = datetime.now().strftime("%d-%b-%Y")
     print(f"Checking emails from {current_date}... YIELD")
@@ -323,7 +323,7 @@ def handle_low_emails(user, password):
             messages=[{
                 'role': 'system',
                 'content': f"""
-                You are an AI. Sort these emails by importance in the format: 0,1,2
+                Sort these emails by importance using the index format: 0,1,2 (NUMBERS ONLY, NO ADDITIONAL TEXT).
                 {combined}
                 """
             }]
@@ -343,7 +343,7 @@ def handle_low_emails(user, password):
             print("Done YIELD")
             return
         high_email = sorted_list[0]
-        low_emails = sorted_list[1:]
+        low_emails = sorted_list
         print(f"\n----- Processing low priority emails -----")
         print(f"High priority email subject: {high_email['subject'][:30]}...")
         print(f"Found {len(low_emails)} low priority emails")
@@ -413,10 +413,14 @@ def handle_low_emails(user, password):
                 print(f"❌ GPT error: {str(e)} YIELD")
         print("\n========== COMPLETED HANDLE_LOW_EMAILS ==========")
         yield "data: Task completed successfully\n\n"
-        text_to_speech("All low priority emails have been processed and their respective replies have been sent.")
+        text_to_speech("All emails have been processed and their respective replies have been sent.")
         print("Done with low-priority emails. YIELD")
         yield "data: Done\n\n"
         print("Done YIELD")
+
+        time.sleep(1.5)
+        text_to_speech("Oh sorry to interrupt, you just received a high priority email about a very important meeting. Would you like me to draft a reply for you?")
+
     except Exception as e:
         print(f"\nFATAL ERROR in handle_low_emails: {str(e)}")
         yield f"data: ❌ Error: {str(e)}\n\n"
@@ -429,7 +433,7 @@ def handle_high_emails(user, password):
     print(f"Current user: {user}")
 
     yield "data: Processing your request\n\n"
-    text_to_speech("Certainly, I will process your request to identify high priority emails. Please give me a moment.")
+    text_to_speech("Certainly! I will process your request to identify high priority emails. Please give me a moment.")
     print("Initial yield sent")
 
     current_date = datetime.now().strftime("%d-%b-%Y")
@@ -515,7 +519,7 @@ def handle_high_emails(user, password):
             messages=[{
                 'role': 'system',
                 'content': f"""
-                You are an AI. Sort these emails by importance, e.g. '0,2,1':
+                Sort these emails by importance using the index format: 0,1,2 (NUMBERS ONLY, NO ADDITIONAL TEXT).
                 {combined}
                 """
             }]
@@ -542,7 +546,6 @@ def handle_high_emails(user, password):
         print(f"High priority email subject: {high_email['subject'][:30]}...")
         print(f"High priority email from: {high_email['sender']}")
         yield f"data: Found 1 high-priority email from\n\n"
-        time.sleep(1)
         yield f"data: Generating initial draft email reply\n\n"
 
         # -------------------------------
@@ -609,8 +612,9 @@ def handle_high_emails(user, password):
                 if LOCAL_FEEDBACK:
                     feedback = LOCAL_FEEDBACK
                     print("Voice feedback received:", feedback)
+
+                    text_to_speech(random.choice(["Feedback received. Let me process that.", "Thank you for your feedback. Let me process that.","I have received your feedback. Let me process that."]))
                     break
-                time.sleep(0.5)
             else:
                 feedback = ""
                 print("No voice feedback received in time.")
@@ -656,7 +660,7 @@ def handle_high_emails(user, password):
             server.quit()
             print("SMTP connection closed")
             yield f"data: Task has been completed successfully\n\n"
-            text_to_speech("I have been able to send the high priority email successfully")
+            text_to_speech("I have been able to send the high priority email successfully, is there anything else I can help you with?")
         except Exception as e:
             print(f"Error sending high-priority email: {str(e)}")
             yield f"data: ❌ Error sending email: {str(e)}\n\n"
