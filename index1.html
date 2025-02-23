@@ -207,10 +207,33 @@
                 text-shadow: 0 0 5px #4263eb, 0 0 10px #ffffff;
             }
         }
+
+        /* Centered GPT Draft box */
+        .draft-container {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            display: none; /* hidden by default */
+            z-index: 999;
+        }
+        .draft-container textarea {
+            width: 600px;
+            height: 300px;
+            border: 2px solid #4263eb;
+            border-radius: 8px;
+            background-color: #ffffffcc;
+            font-family: Arial, sans-serif;
+            font-size: 16px;
+            padding: 10px;
+            resize: none;
+            box-shadow: 0 0 10px rgba(66, 99, 235, 0.2);
+        }
     </style>
     <script>
         let welcomeMessagePlayed = false;
         let isRecording = false;
+        let evtSource = null;
 
         document.addEventListener('DOMContentLoaded', function() {
             // Animate rotating dots
@@ -274,8 +297,8 @@
                             logoContainer.classList.add('minimized');
                             logoText.classList.add('minimized');
 
-                            // Open SSE for summarization
-                            startSSESummarize();
+                            // Open SSE for summarization and pass the transcript text
+                            startSSESummarize(transcript);
                         })
                         .catch(error => {
                             console.error('Error stopping recording:', error);
@@ -284,26 +307,50 @@
             });
         });
 
-        function startSSESummarize() {
+        // Modified: now accepts the transcript to determine whether to show the draft container.
+        function startSSESummarize(transcript) {
             const progressBox = document.getElementById('progressBox');
             progressBox.value = ''; // Clear old logs
 
-            const evtSource = new EventSource('/auto_summarize');
+            const draftContainer = document.querySelector('.draft-container');
+            const draftBox = document.getElementById('draftBox');
+            // Only show the draft container if the transcript includes "high"
+            if(transcript.toLowerCase().includes("high")) {
+                draftContainer.style.display = 'block';
+            } else {
+                draftContainer.style.display = 'none';
+            }
+
+            evtSource = new EventSource('/auto_summarize');
 
             evtSource.onmessage = function(e) {
-                // If we get "Done", close SSE and clear the box
+                // If we get "Done", close SSE and clear logs
                 if (e.data === "Done") {
                     evtSource.close();
+                    evtSource = null;
                     progressBox.value = "";
+                    // Hide the draft box
+                    draftContainer.style.display = 'none';
+                    draftBox.value = '';
                     return;
                 }
-                // Otherwise, replace the textarea content with the new update
+
+                // If the SSE message starts with "DRAFT_CONTENT:"
+                // it means we show it in our GPT Draft box
+                if (e.data.startsWith("DRAFT_CONTENT:")) {
+                    const content = e.data.replace("DRAFT_CONTENT:", "");
+                    draftBox.value = content;
+                    return;
+                }
+
+                // Otherwise, just log in progressBox
                 progressBox.value = e.data;
             };
 
-            // Quietly close on error
             evtSource.onerror = function(err) {
-                evtSource.close();
+                if (evtSource) {
+                    evtSource.close();
+                }
             };
         }
     </script>
@@ -317,6 +364,11 @@
     <!-- SSE Log at bottom-center -->
     <div class="sse-log">
         <textarea id="progressBox" readonly></textarea>
+    </div>
+
+    <!-- Centered GPT draft container (only visible for high priority emails) -->
+    <div class="draft-container">
+        <textarea id="draftBox" readonly></textarea>
     </div>
 </body>
 </html>
